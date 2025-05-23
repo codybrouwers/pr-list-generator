@@ -1,26 +1,37 @@
 {
   "name": "pr-list-generator",
   "version": "1.0.0",
-  "private": true,
   "description": "A tool to generate PR lists",
   "main": "generate-pr-list.ts",
+  "bin": {
+    "pr-list": "./generate-pr-list.ts"
+  },
   "scripts": {
     "start": "bun run generate-pr-list.ts",
     "dev": "bun run --watch generate-pr-list.ts"
   },
   "dependencies": {
     "bun": "^1.2.14",
-    "octokit": "^4.0.2"
+    "octokit": "^4.0.2",
+    "playwright": "^1.52.0"
   },
   "devDependencies": {
     "@types/bun": "^1.2.14"
   },
+  "packageManager": "bun@1.2.14",
   "keywords": [
     "pr",
     "pull-request",
     "generator",
-    "typescript"
+    "typescript",
+    "github",
+    "cli",
+    "slack"
   ],
-  "author": "",
+  "author": "Cody Brouwers",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codybrouwers/pr-list-generator"
+  },
   "license": "MIT"
 }

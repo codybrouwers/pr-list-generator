@@ -1,90 +1,146 @@
 # PR List Generator
 
-A TypeScript script that fetches your open pull requests from GitHub and generates a nicely formatted HTML file that you can copy and paste into Slack.
+A TypeScript CLI tool that fetches your open pull requests from GitHub and generates a nicely formatted HTML file that you can copy and paste into Slack.
 
 ## Prerequisites
 
 - [Bun](https://bun.sh/) installed
-- [GitHub CLI](https://cli.github.com/) installed and authenticated (`gh auth login`)
+- GitHub authentication (see [Authentication](#authentication) section below)
 
 ## Installation
 
-The project is located at `~/Projects/pr-list-generator/` with a global command `pr-list` available from anywhere.
+```bash
+# Clone the repository
+git clone https://github.com/codybrouwers/pr-list-generator.git
+cd pr-list-generator
+
+# Install dependencies
+bun install
+
+# Link for global usage (optional)
+bun link
+```
+
+After linking, you can use `pr-list` command from anywhere, or use `bun run start` locally.
 
 ## Usage
 
-Run the command from anywhere:
-
 ```bash
-pr-list
+# Using the linked command (after bun link)
+pr-list facebook/react
+pr-list microsoft/vscode vercel/next.js facebook/react
+pr-list your-org/repo1 your-org/repo2
+
+# Or using bun run start
+bun run start facebook/react
+bun run start microsoft/vscode vercel/next.js facebook/react
 ```
 
-Or run the script directly:
+### How it works
+
+The tool automatically:
+1. **Fetches your PRs** from the specified repositories
+2. **Generates formatted HTML** with rich styling
+3. **Launches a headless browser** (in parallel with API requests for speed)
+4. **Copies rich content** directly to your clipboard using browser automation
+5. **Ready to paste** into Slack with full formatting preserved
+
+## Authentication
+
+The script supports multiple authentication methods (in order of priority):
+
+### Option 1: GitHub CLI (Recommended - Easiest)
+If you already have GitHub CLI installed and authenticated:
 
 ```bash
-bun ~/Projects/pr-list-generator/generate-pr-list.ts
+# Check if you're already authenticated
+gh auth status
+
+# If not authenticated, login
+gh auth login
+
+# Then use the tool
+pr-list your-org/repo
+```
+
+The script will automatically use your GitHub CLI token.
+
+### Option 2: Environment Variable
+```bash
+# Set environment variable
+export GITHUB_TOKEN="your_token_here"
+
+# Then use the tool
+pr-list your-org/repo
+```
+
+### Option 3: Manual Token Setup
+1. Create a token at: https://github.com/settings/tokens/new
+2. Select scopes: `repo` and `read:user`
+3. Set as environment variable:
+```bash
+echo 'export GITHUB_TOKEN="your_token_here"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
 ## What it does
 
-1. **Fetches PRs**: Gets all your open pull requests from the configured repositories
-2. **Generates HTML**: Creates a formatted HTML file with:
-   - Repository names as headers
+1. **Fetches PRs**: Gets all your open pull requests from the specified repositories
+2. **Generates HTML**: Creates formatted HTML content with:
+   - Repository names as headers (just the repo name, not org/repo)
    - Clickable PR links
    - Change statistics (+additions/-deletions)
-   - Slack-friendly formatting
-3. **Opens in browser**: Automatically opens the HTML file in your default browser
-4. **Copy to Slack**: You can then copy the formatted content directly from the browser and paste it into Slack
-
-## Configuration
-
-Edit the `REPOS` array in `generate-pr-list.ts` to add/remove repositories:
-
-```typescript
-const REPOS: RepoConfig[] = [
-  { name: "vercel/front", repo: "vercel/front" },
-  { name: "vercel/api", repo: "vercel/api" },
-  // Add more repos here
-];
-```
+3. **Browser automation**: Launches a headless browser in parallel with API requests
+4. **Clipboard copying**: Automatically copies rich HTML content to your clipboard
+5. **Slack-ready**: Paste directly into Slack with full formatting preserved
 
 ## Output Format
 
 The generated content looks like this in Slack:
 
-**vercel/front**
+**front**
 
-> #46195 CIFEAT-252 - Update get rolling release endpoint `+1/-1`
-> #46192 CIFEAT-265 - Send canary deployment ID to endpoint `+32/-7`
+> #46195 Add new useCallback optimization `+15/-3`
+> #46192 Fix memory leak in useEffect `+8/-12`
 
-**vercel/api**
+**api**
 
-> #41867 Remove the `/rolling-release/delete` endpoint `+0/-391`
+> #41867 Improve TypeScript performance `+45/-23`
 
-## Project Structure
+## Examples
 
+```bash
+# Check your PRs in popular open source projects
+pr-list facebook/react microsoft/vscode
+
+# Check your PRs in your company's repositories
+pr-list mycompany/frontend mycompany/backend mycompany/mobile
+
+# Check a single repository
+pr-list vercel/next.js
+
+# Get help
+pr-list --help
 ```
-~/Projects/pr-list-generator/
-├── generate-pr-list.ts    # Main TypeScript script
-├── pr-list               # Global command wrapper
-└── README.md             # This file
-```
-
-The `pr-list` command is symlinked to `~/.local/bin/pr-list` for global access.
 
 ## Features
 
-- ✅ Accessibility options enabled for GitHub CLI
-- ✅ Error handling for missing authentication
+- ✅ Simple CLI with `pr-list` command
+- ✅ Multiple authentication methods (GitHub CLI, env vars, manual tokens)
+- ✅ Automatic repository name extraction (removes org prefix)
+- ✅ Command-line arguments for repository specification
+- ✅ Error handling and helpful error messages
 - ✅ Summary statistics
-- ✅ Automatic browser opening
-- ✅ Clean, Slack-friendly formatting
+- ✅ **Playwright-powered browser automation** with parallel initialization
+- ✅ **Automatic clipboard copying** with rich HTML formatting
+- ✅ **Slack-ready formatting** - paste directly with full styling
 - ✅ Change statistics (+additions/-deletions)
-- ✅ Global command available from anywhere
+- ✅ Built with Bun for fast performance
 
 ## Troubleshooting
 
-- **"GitHub CLI is not authenticated"**: Run `gh auth login` first
-- **"No open PRs found"**: Check that you have open PRs in the configured repositories
-- **"Command not found: pr-list"**: Make sure `~/.local/bin` is in your PATH
-- **Script won't run**: Make sure Bun is installed and the script is executable
+- **"No repositories specified"**: Make sure to pass repository names as arguments
+- **"Invalid repository format"**: Repository names must be in "owner/repo" format
+- **"GitHub token not found"**: Set up authentication using one of the methods above
+- **"Authentication failed"**: Check that your token has the correct permissions
+- **"No open PRs found"**: Check that you have open PRs in the specified repositories

@@ -5,6 +5,7 @@ import { $ } from 'bun';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { chromium } from 'playwright';
 
 interface PR {
   number: number;
@@ -19,10 +20,57 @@ interface RepoConfig {
   repo: string;
 }
 
-const REPOS: RepoConfig[] = [
-  { name: 'front', repo: 'vercel/front' },
-  { name: 'api', repo: 'vercel/api' },
-];
+// Parse command line arguments to get repository names
+function parseRepoArgs(): RepoConfig[] {
+  const args = process.argv.slice(2);
+
+  // Handle help flags
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log('PR List Generator - Fetch your open pull requests from GitHub');
+    console.log('');
+    console.log('Usage: pr-list <repo1> <repo2> ...');
+    console.log('   or: bun run start <repo1> <repo2> ...');
+    console.log('');
+    console.log('Examples:');
+    console.log('  pr-list facebook/react');
+    console.log('  pr-list microsoft/vscode vercel/next.js');
+    console.log('  pr-list your-org/repo1 your-org/repo2');
+    console.log('');
+    console.log('Authentication:');
+    console.log('  Set GITHUB_TOKEN environment variable or use gh CLI (gh auth login)');
+    process.exit(0);
+  }
+
+  if (args.length === 0) {
+    console.error('❌ No repositories specified!');
+    console.error('');
+    console.error('Usage: pr-list <repo1> <repo2> ...');
+    console.error('   or: bun run start <repo1> <repo2> ...');
+    console.error('');
+    console.error('Examples:');
+    console.error('  pr-list facebook/react');
+    console.error('  pr-list microsoft/vscode vercel/next.js');
+    console.error('  pr-list your-org/repo1 your-org/repo2');
+    console.error('');
+    console.error('For more help: pr-list --help');
+    process.exit(1);
+  }
+
+  return args.map(repo => {
+    if (!repo.includes('/')) {
+      console.error(`❌ Invalid repository format: "${repo}"`);
+      console.error('   Repository must be in format "owner/repo"');
+      process.exit(1);
+    }
+
+    return {
+      name: repo,
+      repo: repo
+    };
+  });
+}
+
+const repos = parseRepoArgs();
 
 // Get GitHub token from environment or gh CLI
 async function getGitHubToken(): Promise<string> {
@@ -123,11 +171,62 @@ async function fetchPRsForRepo(octokit: Octokit, repo: string): Promise<PR[]> {
   }
 }
 
+function generateSlackText(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
+  const prBlocks = repoData
+    .map(({ repo, prs }) => {
+      // Extract just the repo name (everything after the last '/')
+      const repoName = repo.name.split('/').pop() || repo.name;
+
+      if (prs.length === 0) {
+        return `*${repoName}*\n_No open PRs_`;
+      }
+
+      const prItems = prs
+        .map(
+          (pr) =>
+            `<${pr.url}|#${pr.number} ${pr.title}> \`+${pr.additions}/-${pr.deletions}\``,
+        )
+        .join('\n');
+
+      return `*${repoName}*\n${prItems}`;
+    })
+    .join('\n\n');
+
+  return prBlocks;
+}
+
+function generateSlackHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
+  const prBlocks = repoData
+    .map(({ repo, prs }) => {
+      // Extract just the repo name (everything after the last '/')
+      const repoName = repo.name.split('/').pop() || repo.name;
+
+      if (prs.length === 0) {
+        return `<p><strong>${repoName}</strong></p><p><em>No open PRs</em></p>`;
+      }
+
+      const prItems = prs
+        .map(
+          (pr) =>
+            `<p><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></p>`,
+        )
+        .join('');
+
+      return `<p><strong>${repoName}</strong></p>${prItems}`;
+    })
+    .join('<br>');
+
+  return prBlocks;
+}
+
 function generateHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
   const prBlocks = repoData
     .map(({ repo, prs }) => {
+      // Extract just the repo name (everything after the last '/')
+      const repoName = repo.name.split('/').pop() || repo.name;
+
       if (prs.length === 0) {
-        return `  <blockquote><strong>${repo.name}</strong></blockquote>
+        return `  <blockquote><strong>${repoName}</strong></blockquote>
   <blockquote><em>No open PRs</em></blockquote>`;
       }
 
@@ -138,7 +237,7 @@ function generateHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
         )
         .join('\n');
 
-      return `  <blockquote><strong>${repo.name}</strong></blockquote>
+      return `  <blockquote><strong>${repoName}</strong></blockquote>
 ${prItems}`;
     })
     .join('\n\n');
@@ -194,8 +293,35 @@ ${prBlocks}
 </html>`;
 }
 
+// Function to copy content from browser using Playwright
+async function copyFromBrowser(htmlPath: string, browser: any): Promise<void> {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+
+  // Navigate to the HTML file
+  await page.goto(`file://${htmlPath}`);
+
+  // Wait for content to load
+  await page.waitForLoadState('networkidle');
+
+  // Wait a moment for the page to fully render
+  await page.waitForTimeout(1000);
+
+  // Select all content and copy
+  await page.keyboard.press('Meta+a'); // Select all
+  await page.keyboard.press('Meta+c'); // Copy
+
+  // Wait a moment for clipboard to update
+  await page.waitForTimeout(500);
+
+  await context.close();
+}
+
 async function main() {
   console.log('🔍 Fetching your open pull requests...');
+
+  // Start browser initialization early (in parallel with API setup)
+  const browserPromise = chromium.launch({ headless: true });
 
   const octokit = await createOctokit();
 
@@ -208,9 +334,9 @@ async function main() {
     process.exit(1);
   }
 
-  // Fetch PRs for all repos
+  // Fetch PRs for all repos (while browser is launching in background)
   const repoData = await Promise.all(
-    REPOS.map(async (repo) => ({
+    repos.map(async (repo) => ({
       repo,
       prs: await fetchPRsForRepo(octokit, repo.repo),
     })),
@@ -223,30 +349,30 @@ async function main() {
   const outputPath = join(tmpdir(), 'pr_list.html');
   writeFileSync(outputPath, html);
 
-  // Open in browser
-  console.log('📝 Generated PR list HTML');
-  console.log(`📂 File saved to: ${outputPath}`);
+  // Copy to clipboard using the browser we started earlier
+  console.log('📝 Generated PR list');
 
   try {
-    await $`open ${outputPath}`;
-    console.log(
-      '🌐 Opened in browser - you can now copy the formatted content to Slack!',
-    );
+    const browser = await browserPromise; // Wait for browser to be ready
+    await copyFromBrowser(outputPath, browser);
+    await browser.close(); // Close browser after copying
+
+    console.log('📋 Copied rich content to clipboard using browser automation!');
+    console.log('💡 You can now paste it directly into Slack with full formatting');
   } catch (error) {
-    console.log(
-      '💡 Open this file in your browser to copy the formatted content:',
-    );
-    console.log(`   file://${outputPath}`);
+    console.log('❌ Failed to copy using browser automation:', error);
+    console.log(`💡 Fallback: open this file manually: file://${outputPath}`);
   }
 
   // Print summary
   const totalPRs = repoData.reduce((sum, { prs }) => sum + prs.length, 0);
   console.log(
-    `\n📊 Summary: ${totalPRs} open PRs across ${REPOS.length} repositories`,
+    `\n📊 Summary: ${totalPRs} open PRs across ${repos.length} repositories`,
   );
 
   repoData.forEach(({ repo, prs }) => {
-    console.log(`   ${repo.name}: ${prs.length} PRs`);
+    const repoName = repo.name.split('/').pop() || repo.name;
+    console.log(`   ${repoName}: ${prs.length} PRs`);
   });
 }
 
