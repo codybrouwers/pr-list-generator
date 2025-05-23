@@ -2,11 +2,12 @@
 
 import { Octokit } from 'octokit';
 import { $ } from 'bun';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, homedir } from 'node:os';
 import { chromium } from 'playwright';
 import stripIndent from 'strip-indent';
+import prompts from 'prompts';
 
 interface PR {
   number: number;
@@ -21,43 +22,216 @@ interface RepoConfig {
   repo: string;
 }
 
+// XDG Base Directory utilities
+function getXDGConfigHome(): string {
+  return process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
+}
+
+function getConfigDir(): string {
+  const configDir = join(getXDGConfigHome(), 'pr-list-generator');
+  if (!existsSync(configDir)) {
+    mkdirSync(configDir, { recursive: true });
+  }
+  return configDir;
+}
+
+function getReposFilePath(): string {
+  return join(getConfigDir(), 'repos.json');
+}
+
+// Repository storage functions
+function loadSavedRepos(): string[] {
+  const reposFile = getReposFilePath();
+  if (!existsSync(reposFile)) {
+    return [];
+  }
+
+  try {
+    const content = readFileSync(reposFile, 'utf-8');
+    const data = JSON.parse(content);
+    return Array.isArray(data.repos) ? data.repos : [];
+  } catch (error) {
+    console.warn('Warning: Could not read saved repositories file');
+    return [];
+  }
+}
+
+function saveRepos(repos: string[]): void {
+  const reposFile = getReposFilePath();
+  const data = {
+    repos: [...new Set(repos)], // Remove duplicates
+    lastUpdated: new Date().toISOString()
+  };
+
+  try {
+    writeFileSync(reposFile, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.warn('Warning: Could not save repositories to file');
+  }
+}
+
+// Interactive repository selection
+async function selectRepositories(): Promise<string[]> {
+  const savedRepos = loadSavedRepos();
+
+  if (savedRepos.length === 0) {
+    console.log('No previously saved repositories found.');
+    return await promptForNewRepos();
+  }
+
+  console.log(`Found ${savedRepos.length} previously used repositories:`);
+  savedRepos.forEach((repo, index) => {
+    console.log(`  ${index + 1}. ${repo}`);
+  });
+  console.log('');
+
+  const { action } = await prompts({
+    type: 'select',
+    name: 'action',
+    message: 'What would you like to do?',
+    choices: [
+      { title: 'Select from saved repositories', value: 'select' },
+      { title: 'Add new repositories', value: 'add' },
+      { title: 'Use all saved repositories', value: 'all' }
+    ]
+  });
+
+  if (!action) {
+    console.log('Operation cancelled.');
+    process.exit(0);
+  }
+
+  switch (action) {
+    case 'all':
+      return savedRepos;
+
+    case 'select':
+      return await selectFromSavedRepos(savedRepos);
+
+    case 'add':
+      const newRepos = await promptForNewRepos();
+      const allRepos = [...savedRepos, ...newRepos];
+      saveRepos(allRepos);
+      return newRepos;
+
+    default:
+      return savedRepos;
+  }
+}
+
+async function selectFromSavedRepos(savedRepos: string[]): Promise<string[]> {
+  const { selectedRepos } = await prompts({
+    type: 'multiselect',
+    name: 'selectedRepos',
+    message: 'Select repositories to fetch PRs from:',
+    choices: savedRepos.map(repo => ({
+      title: repo,
+      value: repo,
+      selected: true // Default to all selected
+    })),
+    hint: '- Space to select. Return to submit'
+  });
+
+  if (!selectedRepos || selectedRepos.length === 0) {
+    console.log('No repositories selected.');
+    process.exit(0);
+  }
+
+  // Ask if they want to add more repositories
+  const { addMore } = await prompts({
+    type: 'confirm',
+    name: 'addMore',
+    message: 'Would you like to add more repositories?',
+    initial: false
+  });
+
+  if (addMore) {
+    const newRepos = await promptForNewRepos();
+    const allRepos = [...savedRepos, ...newRepos];
+    saveRepos(allRepos);
+    return [...selectedRepos, ...newRepos];
+  }
+
+  return selectedRepos;
+}
+
+async function promptForNewRepos(): Promise<string[]> {
+  const repos: string[] = [];
+
+  while (true) {
+    const { repo } = await prompts({
+      type: 'text',
+      name: 'repo',
+      message: repos.length === 0
+        ? 'Enter repository (owner/repo format):'
+        : 'Enter another repository (or press Enter to finish):',
+      validate: (value: string) => {
+        if (repos.length > 0 && !value.trim()) {
+          return true; // Allow empty to finish
+        }
+        if (!value.includes('/')) {
+          return 'Repository must be in format "owner/repo"';
+        }
+        return true;
+      }
+    });
+
+    if (!repo || !repo.trim()) {
+      break;
+    }
+
+    repos.push(repo.trim());
+    console.log(`Added: ${repo.trim()}`);
+  }
+
+  if (repos.length === 0) {
+    console.log('No repositories entered.');
+    process.exit(0);
+  }
+
+  return repos;
+}
+
 // Parse command line arguments to get repository names
-function parseRepoArgs(): RepoConfig[] {
+async function parseRepoArgs(): Promise<RepoConfig[]> {
   const args = process.argv.slice(2);
+
+  // If no arguments provided, use interactive selection
+  if (args.length === 0) {
+    const selectedRepos = await selectRepositories();
+    return selectedRepos.map(repo => ({
+      name: repo,
+      repo: repo
+    }));
+  }
 
   // Handle help flags
   if (args.includes('--help') || args.includes('-h')) {
     console.log('PR List Generator - Fetch your open pull requests from GitHub');
     console.log('');
-    console.log('Usage: pr-list <repo1> <repo2> ...');
-    console.log('   or: bun run start <repo1> <repo2> ...');
+    console.log('Usage: pr-list [repo1] [repo2] ...');
+    console.log('   or: bun run start [repo1] [repo2] ...');
     console.log('');
     console.log('Examples:');
     console.log('  pr-list facebook/react');
     console.log('  pr-list microsoft/vscode vercel/next.js');
     console.log('  pr-list your-org/repo1 your-org/repo2');
+    console.log('  pr-list  # Interactive mode with saved repositories');
     console.log('');
     console.log('Authentication:');
     console.log('  Set GITHUB_TOKEN environment variable or use gh CLI (gh auth login)');
+    console.log('');
+    console.log('Repository Storage:');
+    console.log('  Repositories are automatically saved to ~/.config/pr-list-generator/repos.json');
+    console.log('  When no repositories are specified, you can select from previously used ones');
     process.exit(0);
   }
 
-  if (args.length === 0) {
-    console.error('❌ No repositories specified!');
-    console.error('');
-    console.error('Usage: pr-list <repo1> <repo2> ...');
-    console.error('   or: bun run start <repo1> <repo2> ...');
-    console.error('');
-    console.error('Examples:');
-    console.error('  pr-list facebook/react');
-    console.error('  pr-list microsoft/vscode vercel/next.js');
-    console.error('  pr-list your-org/repo1 your-org/repo2');
-    console.error('');
-    console.error('For more help: pr-list --help');
-    process.exit(1);
-  }
+  // Filter out help flags for repository validation
+  const repoArgs = args.filter(arg => arg !== '--help' && arg !== '-h');
 
-  return args.map(repo => {
+  // Validate command line arguments
+  const repos = repoArgs.map(repo => {
     if (!repo.includes('/')) {
       console.error(`❌ Invalid repository format: "${repo}"`);
       console.error('   Repository must be in format "owner/repo"');
@@ -69,9 +243,16 @@ function parseRepoArgs(): RepoConfig[] {
       repo: repo
     };
   });
-}
 
-const repos = parseRepoArgs();
+  // Save the provided repositories for future use
+  const repoNames = repos.map(r => r.name);
+  const savedRepos = loadSavedRepos();
+  const allRepos = [...new Set([...savedRepos, ...repoNames])]; // Merge and deduplicate
+  saveRepos(allRepos);
+  console.log(`💾 Saved ${repoNames.length} repositories for future use`);
+
+  return repos;
+}
 
 // Get GitHub token from environment or gh CLI
 async function getGitHubToken(): Promise<string> {
@@ -326,6 +507,9 @@ async function copyFromBrowser(htmlPath: string, browser: any): Promise<void> {
 
 async function main() {
   console.log('🔍 Fetching your open pull requests...');
+
+  // Parse repository arguments (interactive or command line)
+  const repos = await parseRepoArgs();
 
   // Start browser initialization early (in parallel with API setup)
   const browserPromise = chromium.launch({

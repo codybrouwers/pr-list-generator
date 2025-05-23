@@ -1,0 +1,7 @@
+[test]
+# Enable code coverage by default
+coverage = true
+coverageThreshold = 0.9
+
+# Preload setup files if needed
+# preload = ["./test/setup.ts"]

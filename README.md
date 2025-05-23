@@ -31,6 +31,7 @@ After linking, you can use `pr-list` command from anywhere, or use `bun run star
 
 ## Usage
 
+### Command Line Mode
 ```bash
 # Using the linked command (after bun link)
 pr-list facebook/react
@@ -41,6 +42,33 @@ pr-list your-org/repo1 your-org/repo2
 bun run start facebook/react
 bun run start microsoft/vscode vercel/next.js facebook/react
 ```
+
+### Interactive Mode
+```bash
+# Run without arguments for interactive mode
+pr-list
+
+# Or
+bun run start
+```
+
+When you run the command without arguments, you'll get an interactive interface that:
+- Shows previously used repositories (if any)
+- Lets you select which repositories to check
+- Allows you to add new repositories
+- Automatically saves repositories for future use
+
+### Repository Storage
+
+Repositories are automatically saved to your XDG config directory:
+- **macOS/Linux**: `~/.config/pr-list-generator/repos.json`
+- **Windows**: `%APPDATA%/pr-list-generator/repos.json`
+
+This means:
+- ✅ **First time**: Enter repositories via command line or interactive mode
+- ✅ **Future runs**: Just run `pr-list` and select from saved repositories
+- ✅ **Add more**: Easily add new repositories through the interactive interface
+- ✅ **Mix and match**: Select any combination of saved repositories
 
 ### How it works
 
@@ -103,6 +131,9 @@ source ~/.zshrc
 ## Examples
 
 ```bash
+# Interactive mode - select from saved repositories
+pr-list
+
 # Check your PRs in popular open source projects
 pr-list facebook/react microsoft/vscode
 
@@ -118,6 +149,8 @@ pr-list --help
 
 ## Features
 
+- ✅ **Interactive repository selection** with saved repository management
+- ✅ **XDG Base Directory** compliant configuration storage
 - ✅ Simple CLI with `pr-list` command
 - ✅ Multiple authentication methods (GitHub CLI, env vars, manual tokens)
 - ✅ Automatic repository name extraction (removes org prefix)
@@ -129,6 +162,53 @@ pr-list --help
 - ✅ **Slack-ready formatting** - paste directly with full styling
 - ✅ Change statistics (+additions/-deletions)
 - ✅ Built with Bun for fast performance
+- ✅ **Comprehensive test suite** with 51 tests covering all major functionality
+
+## Testing
+
+This project includes a comprehensive test suite built with Bun's native test runner:
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode
+bun test --watch
+
+# Run tests with coverage
+bun test --coverage
+
+# Run specific test files
+bun test test/storage.test.ts
+bun test test/html-generation.test.ts
+```
+
+### Test Coverage
+
+The test suite includes **51 tests** across **5 test files**:
+
+- **`test/storage.test.ts`** - XDG path utilities and repository storage
+- **`test/html-generation.test.ts`** - HTML/Slack formatting functions
+- **`test/argument-parsing.test.ts`** - Command-line argument parsing and validation
+- **`test/github-api.test.ts`** - GitHub API integration with mocks
+- **`test/integration.test.ts`** - End-to-end workflow testing
+
+### Test Categories
+
+- **Unit Tests**: Individual function testing with isolated inputs/outputs
+- **Integration Tests**: End-to-end workflow testing
+- **Error Handling**: Graceful failure and recovery scenarios
+- **Mock Testing**: GitHub API interactions without real API calls
+- **File System**: XDG config storage and JSON persistence
+- **Data Validation**: Repository format validation and data transformation
+
+### Running Tests
+
+Tests are configured to run automatically with:
+- Automatic cleanup of temporary files
+- Mock GitHub API responses
+- Isolated test environments
+- Comprehensive error scenario coverage
 
 ## Troubleshooting
 
