@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium } from 'playwright';
+import stripIndent from 'strip-indent';
 
 interface PR {
   number: number;
@@ -226,71 +227,77 @@ function generateHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
       const repoName = repo.name.split('/').pop() || repo.name;
 
       if (prs.length === 0) {
-        return `  <blockquote><strong>${repoName}</strong></blockquote>
-  <blockquote><em>No open PRs</em></blockquote>`;
+        return stripIndent(`
+          <blockquote><strong><code>${repoName}</code></strong></blockquote>
+          <blockquote><em>No open PRs</em></blockquote>
+        `);
       }
 
       const prItems = prs
         .map(
           (pr) =>
-            `  <blockquote><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></blockquote>`,
+            `<blockquote><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></blockquote>`,
         )
         .join('\n');
 
-      return `  <blockquote><strong>${repoName}</strong></blockquote>
-${prItems}`;
+      return stripIndent(`
+        <blockquote><strong><code>${repoName}</code></strong></blockquote>
+        ${prItems}
+      `);
     })
     .join('\n\n');
 
-  return `<!DOCTYPE html>
-<html>
+  return stripIndent(`
+    <!DOCTYPE html>
+    <html>
 
-<head>
-  <title>PR List</title>
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    }
+    <head>
+      <title>PR List</title>
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
 
-    blockquote {
-      margin: 5px 0;
-      padding: 8px 12px;
-      border-left: 4px solid #ccc;
-      background: #f9f9f9;
-    }
+        blockquote {
+          margin: 5px 0;
+          padding: 8px 12px;
+          border-left: 4px solid #ccc;
+          background: #f9f9f9;
+        }
 
-    a {
-      color: #1264a3;
-      text-decoration: none;
-    }
+        a {
+          color: #1264a3;
+          text-decoration: none;
+        }
 
-    a:hover {
-      text-decoration: underline;
-    }
+        a:hover {
+          text-decoration: underline;
+        }
 
-    strong {
-      font-weight: 600;
-    }
+        strong {
+          font-weight: 600;
+        }
 
-    code {
-      background: #f1f1f1;
-      padding: 2px 4px;
-      border-radius: 3px;
-      font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-      font-size: 0.9em;
-    }
+        code {
+          background: #f1f1f1;
+          padding: 2px 4px;
+          border-radius: 3px;
+          font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+          font-size: 0.9em;
+        }
 
-    em {
-      color: #666;
-    }
-  </style>
-</head>
+        em {
+          color: #666;
+        }
+      </style>
+    </head>
 
-<body>
-${prBlocks}
-</body>
+    <body>
+    ${prBlocks}
+    </body>
 
-</html>`;
+    </html>
+  `);
 }
 
 // Function to copy content from browser using Playwright
@@ -305,14 +312,14 @@ async function copyFromBrowser(htmlPath: string, browser: any): Promise<void> {
   await page.waitForLoadState('networkidle');
 
   // Wait a moment for the page to fully render
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(50);
 
   // Select all content and copy
   await page.keyboard.press('Meta+a'); // Select all
   await page.keyboard.press('Meta+c'); // Copy
 
   // Wait a moment for clipboard to update
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(50);
 
   await context.close();
 }
@@ -321,9 +328,23 @@ async function main() {
   console.log('🔍 Fetching your open pull requests...');
 
   // Start browser initialization early (in parallel with API setup)
-  const browserPromise = chromium.launch({ headless: true });
+  const browserPromise = chromium.launch({
+    headless: false,
+    args: [
+      '--no-first-run',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-web-security',
+      '--disable-features=TranslateUI',
+      '--no-default-browser-check',
+      '--disable-default-apps'
+    ]
+  });
 
-  const octokit = await createOctokit();
+  const [octokit, browser] = await Promise.all([createOctokit(), browserPromise]);
 
   // Verify authentication
   try {
@@ -353,7 +374,6 @@ async function main() {
   console.log('📝 Generated PR list');
 
   try {
-    const browser = await browserPromise; // Wait for browser to be ready
     await copyFromBrowser(outputPath, browser);
     await browser.close(); // Close browser after copying
 
