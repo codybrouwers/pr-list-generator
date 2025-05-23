@@ -98,14 +98,7 @@ source ~/.zshrc
 
 The generated content looks like this in Slack:
 
-**front**
-
-> #46195 Add new useCallback optimization `+15/-3`
-> #46192 Fix memory leak in useEffect `+8/-12`
-
-**api**
-
-> #41867 Improve TypeScript performance `+45/-23`
+![CleanShot 2025-05-22 at 23 06 32@2x](https://github.com/user-attachments/assets/5dcea74f-10dc-42b5-a6f3-ec99d83bdfaf)
 
 ## Examples
 
