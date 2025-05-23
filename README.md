@@ -6,7 +6,7 @@ A TypeScript CLI tool that fetches your open pull requests from GitHub and gener
 
 The generated content looks like this in Slack:
 
-![CleanShot 2025-05-22 at 23 34 27@2x](https://github.com/user-attachments/assets/4340108c-5654-4ca2-af1f-c70f858e1a4e)
+![CleanShot 2025-05-23 at 00 15 33@2x](https://github.com/user-attachments/assets/39c09395-ce67-412c-9fb2-1d99ca439795)
 
 ## Prerequisites
 
