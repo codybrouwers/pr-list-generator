@@ -2,6 +2,12 @@
 
 A TypeScript CLI tool that fetches your open pull requests from GitHub and generates a nicely formatted HTML file that you can copy and paste into Slack.
 
+## Example Output in Slack
+
+The generated content looks like this in Slack:
+
+![CleanShot 2025-05-22 at 23 34 27@2x](https://github.com/user-attachments/assets/4340108c-5654-4ca2-af1f-c70f858e1a4e)
+
 ## Prerequisites
 
 - [Bun](https://bun.sh/) installed
@@ -93,12 +99,6 @@ source ~/.zshrc
 3. **Browser automation**: Launches a headless browser in parallel with API requests
 4. **Clipboard copying**: Automatically copies rich HTML content to your clipboard
 5. **Slack-ready**: Paste directly into Slack with full formatting preserved
-
-## Output Format
-
-The generated content looks like this in Slack:
-
-![CleanShot 2025-05-22 at 23 34 27@2x](https://github.com/user-attachments/assets/4340108c-5654-4ca2-af1f-c70f858e1a4e)
 
 ## Examples
 
