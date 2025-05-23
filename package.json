@@ -11,29 +11,25 @@
     "dev": "bun run --watch generate-pr-list.ts",
     "test": "bun test",
     "test:watch": "bun test --watch",
-    "test:coverage": "bun test --coverage"
+    "test:coverage": "bun test --coverage",
+    "type-check": "tsc",
+    "check": "biome check --fix --unsafe --error-on-warnings ."
   },
   "dependencies": {
     "bun": "^1.2.14",
-    "octokit": "^4.0.2",
+    "octokit": "^5.0.2",
     "playwright": "^1.52.0",
     "prompts": "^2.4.2",
     "strip-indent": "^4.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@types/bun": "^1.2.14",
-    "@types/prompts": "^2.4.9"
+    "@types/prompts": "^2.4.9",
+    "typescript": "^5.8.3"
   },
   "packageManager": "bun@1.2.14",
-  "keywords": [
-    "pr",
-    "pull-request",
-    "generator",
-    "typescript",
-    "github",
-    "cli",
-    "slack"
-  ],
+  "keywords": ["pr", "pull-request", "generator", "typescript", "github", "cli", "slack"],
   "author": "Cody Brouwers",
   "repository": {
     "type": "git",

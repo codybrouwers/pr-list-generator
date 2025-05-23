@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 
-import { Octokit } from 'octokit';
-import { $ } from 'bun';
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { tmpdir, homedir } from 'node:os';
-import { chromium } from 'playwright';
-import stripIndent from 'strip-indent';
+import { $ } from 'bun';
+import { Octokit } from 'octokit';
+import { type Browser, chromium } from 'playwright';
 import prompts from 'prompts';
+import stripIndent from 'strip-indent';
 
 interface PR {
   number: number;
@@ -60,7 +60,7 @@ function saveRepos(repos: string[]): void {
   const reposFile = getReposFilePath();
   const data = {
     repos: [...new Set(repos)], // Remove duplicates
-    lastUpdated: new Date().toISOString()
+    lastUpdated: new Date().toISOString(),
   };
 
   try {
@@ -92,8 +92,8 @@ async function selectRepositories(): Promise<string[]> {
     choices: [
       { title: 'Select from saved repositories', value: 'select' },
       { title: 'Add new repositories', value: 'add' },
-      { title: 'Use all saved repositories', value: 'all' }
-    ]
+      { title: 'Use all saved repositories', value: 'all' },
+    ],
   });
 
   if (!action) {
@@ -108,11 +108,12 @@ async function selectRepositories(): Promise<string[]> {
     case 'select':
       return await selectFromSavedRepos(savedRepos);
 
-    case 'add':
+    case 'add': {
       const newRepos = await promptForNewRepos();
       const allRepos = [...savedRepos, ...newRepos];
       saveRepos(allRepos);
       return newRepos;
+    }
 
     default:
       return savedRepos;
@@ -124,12 +125,12 @@ async function selectFromSavedRepos(savedRepos: string[]): Promise<string[]> {
     type: 'multiselect',
     name: 'selectedRepos',
     message: 'Select repositories to fetch PRs from:',
-    choices: savedRepos.map(repo => ({
+    choices: savedRepos.map((repo) => ({
       title: repo,
       value: repo,
-      selected: true // Default to all selected
+      selected: true, // Default to all selected
     })),
-    hint: '- Space to select. Return to submit'
+    hint: '- Space to select. Return to submit',
   });
 
   if (!selectedRepos || selectedRepos.length === 0) {
@@ -142,7 +143,7 @@ async function selectFromSavedRepos(savedRepos: string[]): Promise<string[]> {
     type: 'confirm',
     name: 'addMore',
     message: 'Would you like to add more repositories?',
-    initial: false
+    initial: false,
   });
 
   if (addMore) {
@@ -162,9 +163,10 @@ async function promptForNewRepos(): Promise<string[]> {
     const { repo } = await prompts({
       type: 'text',
       name: 'repo',
-      message: repos.length === 0
-        ? 'Enter repository (owner/repo format):'
-        : 'Enter another repository (or press Enter to finish):',
+      message:
+        repos.length === 0
+          ? 'Enter repository (owner/repo format):'
+          : 'Enter another repository (or press Enter to finish):',
       validate: (value: string) => {
         if (repos.length > 0 && !value.trim()) {
           return true; // Allow empty to finish
@@ -173,7 +175,7 @@ async function promptForNewRepos(): Promise<string[]> {
           return 'Repository must be in format "owner/repo"';
         }
         return true;
-      }
+      },
     });
 
     if (!repo || !repo.trim()) {
@@ -199,9 +201,9 @@ async function parseRepoArgs(): Promise<RepoConfig[]> {
   // If no arguments provided, use interactive selection
   if (args.length === 0) {
     const selectedRepos = await selectRepositories();
-    return selectedRepos.map(repo => ({
+    return selectedRepos.map((repo) => ({
       name: repo,
-      repo: repo
+      repo: repo,
     }));
   }
 
@@ -228,10 +230,10 @@ async function parseRepoArgs(): Promise<RepoConfig[]> {
   }
 
   // Filter out help flags for repository validation
-  const repoArgs = args.filter(arg => arg !== '--help' && arg !== '-h');
+  const repoArgs = args.filter((arg) => arg !== '--help' && arg !== '-h');
 
   // Validate command line arguments
-  const repos = repoArgs.map(repo => {
+  const repos = repoArgs.map((repo) => {
     if (!repo.includes('/')) {
       console.error(`❌ Invalid repository format: "${repo}"`);
       console.error('   Repository must be in format "owner/repo"');
@@ -240,12 +242,12 @@ async function parseRepoArgs(): Promise<RepoConfig[]> {
 
     return {
       name: repo,
-      repo: repo
+      repo: repo,
     };
   });
 
   // Save the provided repositories for future use
-  const repoNames = repos.map(r => r.name);
+  const repoNames = repos.map((r) => r.name);
   const savedRepos = loadSavedRepos();
   const allRepos = [...new Set([...savedRepos, ...repoNames])]; // Merge and deduplicate
   saveRepos(allRepos);
@@ -271,9 +273,8 @@ async function getGitHubToken(): Promise<string> {
     if (token.trim()) {
       console.log('✅ Using token from gh CLI');
       return token.trim();
-    } else {
-      console.log('⚠️  gh CLI token command returned empty');
     }
+    console.log('⚠️  gh CLI token command returned empty');
   } catch (error) {
     console.log('⚠️  gh CLI not available or failed:', error);
   }
@@ -301,6 +302,12 @@ async function fetchPRsForRepo(octokit: Octokit, repo: string): Promise<PR[]> {
 
     const [owner, repoName] = repo.split('/');
 
+    // Validate that we have both owner and repo name
+    if (!owner || !repoName) {
+      console.error(`Invalid repository format: ${repo}. Expected format: owner/repo`);
+      return [];
+    }
+
     // Get authenticated user to filter by author
     const { data: user } = await octokit.rest.users.getAuthenticated();
 
@@ -313,7 +320,7 @@ async function fetchPRsForRepo(octokit: Octokit, repo: string): Promise<PR[]> {
     });
 
     // Filter PRs by the authenticated user
-    const userPRs = prs.filter(pr => pr.user?.login === user.login);
+    const userPRs = prs.filter((pr) => pr.user?.login === user.login);
 
     // Fetch detailed information for each PR to get additions/deletions
     const detailedPRs = await Promise.all(
@@ -364,10 +371,7 @@ function generateSlackText(repoData: { repo: RepoConfig; prs: PR[] }[]): string 
       }
 
       const prItems = prs
-        .map(
-          (pr) =>
-            `<${pr.url}|#${pr.number} ${pr.title}> \`+${pr.additions}/-${pr.deletions}\``,
-        )
+        .map((pr) => `<${pr.url}|#${pr.number} ${pr.title}> \`+${pr.additions}/-${pr.deletions}\``)
         .join('\n');
 
       return `*${repoName}*\n${prItems}`;
@@ -390,7 +394,7 @@ function generateSlackHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string 
       const prItems = prs
         .map(
           (pr) =>
-            `<p><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></p>`,
+            `<p><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></p>`
         )
         .join('');
 
@@ -417,7 +421,7 @@ function generateHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
       const prItems = prs
         .map(
           (pr) =>
-            `<blockquote><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></blockquote>`,
+            `<blockquote><a href="${pr.url}">#${pr.number} ${pr.title}</a> <code>+${pr.additions}/-${pr.deletions}</code></blockquote>`
         )
         .join('\n');
 
@@ -482,7 +486,7 @@ function generateHTML(repoData: { repo: RepoConfig; prs: PR[] }[]): string {
 }
 
 // Function to copy content from browser using Playwright
-async function copyFromBrowser(htmlPath: string, browser: any): Promise<void> {
+async function copyFromBrowser(htmlPath: string, browser: Browser): Promise<void> {
   const context = await browser.newContext();
   const page = await context.newPage();
 
@@ -524,8 +528,8 @@ async function main() {
       '--disable-web-security',
       '--disable-features=TranslateUI',
       '--no-default-browser-check',
-      '--disable-default-apps'
-    ]
+      '--disable-default-apps',
+    ],
   });
 
   const [octokit, browser] = await Promise.all([createOctokit(), browserPromise]);
@@ -544,7 +548,7 @@ async function main() {
     repos.map(async (repo) => ({
       repo,
       prs: await fetchPRsForRepo(octokit, repo.repo),
-    })),
+    }))
   );
 
   // Generate HTML
@@ -570,14 +574,12 @@ async function main() {
 
   // Print summary
   const totalPRs = repoData.reduce((sum, { prs }) => sum + prs.length, 0);
-  console.log(
-    `\n📊 Summary: ${totalPRs} open PRs across ${repos.length} repositories`,
-  );
+  console.log(`\n📊 Summary: ${totalPRs} open PRs across ${repos.length} repositories`);
 
-  repoData.forEach(({ repo, prs }) => {
+  for (const { repo, prs } of repoData) {
     const repoName = repo.name.split('/').pop() || repo.name;
     console.log(`   ${repoName}: ${prs.length} PRs`);
-  });
+  }
 }
 
 // Run the script
