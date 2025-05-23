@@ -98,7 +98,7 @@ source ~/.zshrc
 
 The generated content looks like this in Slack:
 
-![CleanShot 2025-05-22 at 23 06 32@2x](https://github.com/user-attachments/assets/5dcea74f-10dc-42b5-a6f3-ec99d83bdfaf)
+![CleanShot 2025-05-22 at 23 34 27@2x](https://github.com/user-attachments/assets/4340108c-5654-4ca2-af1f-c70f858e1a4e)
 
 ## Examples
 
